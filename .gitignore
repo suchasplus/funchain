@@ -1,0 +1,24 @@
+.claude/
+.gemini/
+.agents/
+
+# Rust / Cargo
+/target
+Cargo.lock
+**/*.rs.bk
+
+# Testing / Coverage
+lcov.info
+coverage/
+*.profraw
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
