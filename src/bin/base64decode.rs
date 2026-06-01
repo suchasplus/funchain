@@ -1,6 +1,6 @@
+use base64::prelude::*;
 use std::env;
 use std::io::{self, Read, Write};
-use base64::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();

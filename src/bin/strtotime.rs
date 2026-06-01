@@ -1,7 +1,7 @@
+use chrono::{DateTime, Local};
+use funchain::strtotime;
 use std::env;
 use std::process;
-use chrono::{Local, DateTime};
-use funchain::strtotime;
 
 fn main() {
     let args: Vec<String> = env::args().collect();

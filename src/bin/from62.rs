@@ -1,6 +1,6 @@
+use funchain::base62;
 use std::env;
 use std::io::{self, Read, Write};
-use funchain::base62;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 io::stdout().write_all(output.as_bytes())?;
             }
             Ok(())
-        },
+        }
         Err(e) => Err(e.into()),
     }
 }

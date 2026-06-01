@@ -1,6 +1,6 @@
-use std::env;
-use rand::Rng;
 use base64::prelude::*;
+use rand::Rng;
+use std::env;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -16,13 +16,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Try 'rand64 --help' for more information.");
         std::process::exit(1);
     }
-    
+
     // Parse the length argument
     let len: usize = args[1].parse()?;
-    
+
     let encoded = generate_base64(len);
     println!("{}", encoded);
-    
+
     Ok(())
 }
 

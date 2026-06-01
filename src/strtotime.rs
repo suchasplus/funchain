@@ -1,5 +1,5 @@
 use chrono::{DateTime, Datelike, NaiveDate, TimeZone};
-use chrono_english::{parse_date_string, Dialect};
+use chrono_english::{Dialect, parse_date_string};
 use std::fmt::Display;
 
 /// Parses a natural language date/time string into a DateTime object.
@@ -64,14 +64,13 @@ where
             (year, month + 1)
         };
 
-        if let Some(first_next) = NaiveDate::from_ymd_opt(next_y, next_m, 1) {
-            if let Some(last_day) = first_next.pred_opt() {
-                if let Some(dt) = last_day.and_hms_opt(0, 0, 0) {
-                     // single() is best effort for timezone mapping
-                     if let Some(local_dt) = now.timezone().from_local_datetime(&dt).single() {
-                         return Ok(local_dt);
-                     }
-                }
+        if let Some(first_next) = NaiveDate::from_ymd_opt(next_y, next_m, 1)
+            && let Some(last_day) = first_next.pred_opt()
+            && let Some(dt) = last_day.and_hms_opt(0, 0, 0)
+        {
+            // single() is best effort for timezone mapping
+            if let Some(local_dt) = now.timezone().from_local_datetime(&dt).single() {
+                return Ok(local_dt);
             }
         }
         return Err("Could not calculate last day of month".to_string());
@@ -87,14 +86,17 @@ where
     // 3. Delegate to chrono-english
     match parse_date_string(&input, now, Dialect::Us) {
         Ok(dt) => Ok(dt),
-        Err(e) => Err(format!("Could not parse time string '{}': {}", input_raw, e)),
+        Err(e) => Err(format!(
+            "Could not parse time string '{}': {}",
+            input_raw, e
+        )),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{Utc, TimeZone};
+    use chrono::{TimeZone, Utc};
 
     #[test]
     fn test_parse_relative_plus() {
@@ -109,12 +111,15 @@ mod tests {
         let result = parse("3 hours", now).unwrap();
         assert_eq!(result, Utc.with_ymd_and_hms(2023, 1, 1, 15, 0, 0).unwrap());
     }
-    
+
     #[test]
     fn test_parse_ago() {
         let now = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap();
         let result = parse("2 days ago", now).unwrap();
-        assert_eq!(result, Utc.with_ymd_and_hms(2022, 12, 30, 12, 0, 0).unwrap());
+        assert_eq!(
+            result,
+            Utc.with_ymd_and_hms(2022, 12, 30, 12, 0, 0).unwrap()
+        );
     }
 
     #[test]
@@ -123,7 +128,7 @@ mod tests {
         let now = Utc.with_ymd_and_hms(2023, 1, 15, 12, 0, 0).unwrap();
         let result = parse("last day of this month", now).unwrap();
         assert_eq!(result, Utc.with_ymd_and_hms(2023, 1, 31, 0, 0, 0).unwrap());
-        
+
         // Feb 2024 (Leap) -> Feb 29 2024
         let now = Utc.with_ymd_and_hms(2024, 2, 10, 10, 0, 0).unwrap();
         let result = parse("last day of this month", now).unwrap();
@@ -134,7 +139,7 @@ mod tests {
         let result = parse("last day of this month", now).unwrap();
         assert_eq!(result, Utc.with_ymd_and_hms(2023, 12, 31, 0, 0, 0).unwrap());
     }
-    
+
     #[test]
     fn test_parse_next_friday() {
         // Jan 1 2023 is Sunday.
@@ -142,7 +147,10 @@ mod tests {
         let now = Utc.with_ymd_and_hms(2023, 1, 1, 12, 0, 0).unwrap();
         let result = parse("next friday", now).unwrap();
         // chrono-english "next friday" usually sets time to 00:00:00
-        assert_eq!(result.date_naive(), NaiveDate::from_ymd_opt(2023, 1, 6).unwrap());
+        assert_eq!(
+            result.date_naive(),
+            NaiveDate::from_ymd_opt(2023, 1, 6).unwrap()
+        );
     }
 
     #[test]

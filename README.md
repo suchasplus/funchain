@@ -44,6 +44,7 @@ All commands support the `--help` flag to display usage information.
 | **Random** | `rand32` | Generates random Hex string (openssl rand -hex). |
 | | `rand64` | Generates random Base64 string (openssl rand -base64). |
 | **Date/Time** | `strtotime` | Parses natural language date/time to Unix timestamp. |
+| **Markdown** | `mt-rs` | Renders Markdown to HTML and opens it in the browser; mirrors the Go [`mt`](https://github.com/suchasplus/madtool) toolchain (single file, multi-file site, live-reload dev server). |
 
 ---
 
@@ -141,13 +142,82 @@ strtotime "last day of this month"
 # Output: 1772208000
 ```
 
+---
+
+### 5. Markdown Renderer
+
+#### `mt-rs`
+Renders Markdown to HTML and opens it in your default browser. A Rust port of
+the Go [`mt`](https://github.com/suchasplus/madtool) markdown viewer. Bundles
+MathJax, Mermaid, Fumadocs-inspired styling, OneNote-flavored mermaid colors,
+and an offline syntax highlighter — all embedded into a single binary.
+
+**Three usage modes**
+
+```bash
+# 1. One-shot: render to $TMPDIR/mt/<name>.html and open the browser
+mt-rs path/to/doc.md
+
+# 2. Self-contained HTML (everything inlined: CSS, JS, fonts, MathJax, Mermaid)
+mt-rs -o ~/share-me.html path/to/doc.md
+
+# 3. Directory site mode: every *.md becomes an HTML page with nav, prev/next,
+#    cross-file [[Wikilinks]] resolved across the whole tree
+mt-rs path/to/docs/
+```
+
+**Live-reload dev server**
+
+```bash
+# Single file: watches the parent dir to survive editor swap-writes
+mt-rs --serve path/to/doc.md
+
+# Directory: watches the tree recursively, rebuilds whole site on any .md change
+mt-rs --serve path/to/docs/
+
+# Pick a port (default 7331), or skip the browser launch:
+mt-rs --serve --port 8000 --no-open path/to/doc.md
+```
+
+**Other useful flags**
+
+```bash
+mt-rs --print path/to/doc.md     # render HTML to stdout (good for pipes)
+mt-rs --theme dark path/to/...   # force theme (auto | light | dark)
+mt-rs --version                  # build metadata (commit + timestamp)
+mt-rs --help
+```
+
+**Features**
+
+- GitHub-flavored Markdown: tables, strikethrough, autolinks, task lists
+- Footnotes, definition lists, typographer, CJK segmentation
+- **MathJax** — `$E=mc^2$` inline and `$$ … $$` display
+- **Mermaid** — fenced ` ```mermaid ` blocks with OneNote-inspired theme +
+  click-to-zoom modal (1:1 / Fit / Auto)
+- **Syntax highlighting** via syntect (light + dark themes auto-swap)
+- **MkDocs-style admonitions** — `!!! note "Title"` … 4-space indented body
+- **Wikilinks** — `[[Page]]` or `[[Page|Alias]]` resolved across the whole
+  directory tree
+- **YAML frontmatter** — `title`, `description`, `tags`, `theme`
+- **Fumadocs-inspired UI** — floating drawers for the left nav and right TOC,
+  3-state theme toggle (auto / light / dark) following OS preference
+- **Live-reload** via `--serve` (fsnotify + websocket, 120 ms debounce)
+- Fully offline: MathJax and Mermaid are baked into the binary
+
 ## Development
 
 You can run tests using `cargo test` or `make test`.
 
 ```bash
-make test
+make test           # all tests
+make coverage       # cargo-llvm-cov summary
+make coverage-html  # HTML report under target/llvm-cov/html/
 ```
+
+The `mt-rs` static assets (CSS, JS, MathJax, Mermaid) are mirrored from the Go
+side via `make sync-mt-assets`. Run that whenever the Go-side `internal/assets/static/`
+changes.
 
 ## License
 

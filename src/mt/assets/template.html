@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="{{ lang }}" data-theme="{{ theme }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ title }}</title>
+{% if description %}<meta name="description" content="{{ description }}">{% endif %}
+{% if inline_style %}<style>{{ inline_style | safe }}</style>{% else %}<link rel="stylesheet" href="{{ assets_base | safe }}style.css">{% endif %}
+{% for tag in extra_head_tags %}{{ tag | safe }}
+{% endfor %}
+</head>
+<body>
+<header class="mt-header">
+  <div class="mt-header__inner">
+    {% if site_tree %}<button class="mt-icon-btn" aria-label="Toggle navigation" data-mt-nav-toggle title="Toggle sidebar"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>{% endif %}
+    <span class="mt-header__logo">mt</span>
+    <span class="mt-header__title">{{ title }}</span>
+    <div class="mt-header__spacer"></div>
+    <button class="mt-icon-btn" aria-label="Toggle table of contents" data-mt-toc-toggle title="Toggle TOC"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+    <button class="mt-theme-toggle" aria-label="Toggle theme" data-mt-theme-toggle title="Toggle theme (auto / light / dark)">
+      <svg class="mt-theme-icon mt-theme-icon--auto" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke-dasharray="2 3"/></svg>
+      <svg class="mt-theme-icon mt-theme-icon--light" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      <svg class="mt-theme-icon mt-theme-icon--dark" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="mt-layout">
+  <main class="mt-main">
+    <article class="mt-content">
+      {{ body | safe }}
+    </article>
+    {% if prev_href or next_href %}<div class="mt-pager mt-pager--bottom">
+      {% if prev_href %}<a class="mt-pager__prev" href="{{ prev_href }}" rel="prev"><span class="mt-pager__dir">← Previous</span><span class="mt-pager__label">{{ prev_label }}</span></a>{% else %}<span></span>{% endif %}
+      {% if next_href %}<a class="mt-pager__next" href="{{ next_href }}" rel="next"><span class="mt-pager__dir">Next →</span><span class="mt-pager__label">{{ next_label }}</span></a>{% else %}<span></span>{% endif %}
+    </div>{% endif %}
+  </main>
+</div>
+
+{% if site_tree %}<nav class="mt-nav" aria-label="Site navigation" aria-hidden="true">
+  {% if site_name %}<div class="mt-nav__title">{{ site_name }}</div>{% endif %}
+  {{ site_tree | safe }}
+</nav>{% endif %}
+<aside class="mt-toc" aria-label="Table of contents" aria-hidden="true">
+  <div class="mt-toc__title">On this page</div>
+  {% if toc %}{{ toc | safe }}{% else %}<p class="mt-toc__empty">No headings.</p>{% endif %}
+</aside>
+
+{% if has_mermaid %}<div class="mt-mmd-modal" id="mtMmdModal" aria-hidden="true">
+  <div class="mt-mmd-toolbar" role="toolbar">
+    <button data-mmd-act="zoom-out" title="Zoom out (-)">&#x2212;</button>
+    <span class="mt-mmd-zoom" id="mtMmdZoom">100%</span>
+    <button data-mmd-act="zoom-in" title="Zoom in (+)">&#x2b;</button>
+    <span class="mt-mmd-sep"></span>
+    <button data-mmd-act="reset" title="Reset (0)">1:1</button>
+    <button data-mmd-act="fit" title="Fit (F)">Fit</button>
+    <button data-mmd-act="auto" title="Auto readable (A)">Auto</button>
+    <span class="mt-mmd-sep"></span>
+    <button data-mmd-act="close" title="Close (Esc)">&times;</button>
+    <span class="mt-mmd-hint">Scroll = zoom · Drag = pan · F fit · A auto · Esc close</span>
+  </div>
+  <div class="mt-mmd-viewport" id="mtMmdViewport">
+    <div class="mt-mmd-canvas" id="mtMmdCanvas"></div>
+  </div>
+</div>{% endif %}
+{% if inline_mermaid %}<script>{{ inline_mermaid | safe }}</script>{% elif mermaid_src %}<script src="{{ mermaid_src | safe }}"></script>{% endif %}
+{% if has_mermaid %}<script>
+(function(){
+  if(!window.mermaid)return;
+
+  var ONENOTE_LIGHT = {
+    background: 'transparent',
+    primaryColor: '#f5edf7', primaryTextColor: '#2d1144', primaryBorderColor: '#7719AA',
+    secondaryColor: '#fff4e0', secondaryBorderColor: '#d9a86c', secondaryTextColor: '#3a2412',
+    tertiaryColor: '#e3f0fd', tertiaryBorderColor: '#7aa9d9', tertiaryTextColor: '#0d2542',
+    mainBkg: '#fefcff', nodeBorder: '#7719AA', nodeTextColor: '#1f1023',
+    clusterBkg: '#faf5fc', clusterBorder: '#c79ed7',
+    defaultLinkColor: '#6b438a', titleColor: '#2d1144',
+    edgeLabelBackground: '#ffffff', lineColor: '#6b438a',
+    textColor: '#1f1023', labelBackground: '#ffffff', altBackground: '#fbf6fd',
+    actorBkg: '#f5edf7', actorBorder: '#7719AA', actorTextColor: '#2d1144', actorLineColor: '#c79ed7',
+    signalColor: '#6b438a', signalTextColor: '#1f1023',
+    labelBoxBkgColor: '#fffbe0', labelBoxBorderColor: '#d9a86c', labelTextColor: '#3a2412',
+    loopTextColor: '#1f1023',
+    noteBkgColor: '#fff4e0', noteTextColor: '#3a2412', noteBorderColor: '#d9a86c',
+    activationBorderColor: '#7719AA', activationBkgColor: '#ece0f3',
+    pie1: '#7719AA', pie2: '#0078D4', pie3: '#107C10', pie4: '#F7B924',
+    pie5: '#E81123', pie6: '#5C2D91', pie7: '#0099BC', pie8: '#498205',
+    pie9: '#CA5010', pie10: '#881798', pie11: '#038387', pie12: '#A4262C',
+    pieTitleTextSize: '20px', pieSectionTextColor: '#ffffff'
+  };
+  var ONENOTE_DARK = {
+    background: 'transparent',
+    primaryColor: '#3c1361', primaryTextColor: '#f0e0f5', primaryBorderColor: '#b87fd1',
+    secondaryColor: '#4a3621', secondaryBorderColor: '#d9a86c', secondaryTextColor: '#f5e8d0',
+    tertiaryColor: '#1f2d4a', tertiaryBorderColor: '#7aa9d9', tertiaryTextColor: '#dde8f5',
+    mainBkg: '#251434', nodeBorder: '#b87fd1', nodeTextColor: '#f0e0f5',
+    clusterBkg: '#1c0e26', clusterBorder: '#7719AA',
+    defaultLinkColor: '#b87fd1', titleColor: '#f0e0f5',
+    edgeLabelBackground: '#1a1023', lineColor: '#9d6abb',
+    textColor: '#f0e0f5', labelBackground: '#1a1023', altBackground: '#1c0e26',
+    actorBkg: '#3c1361', actorBorder: '#b87fd1', actorTextColor: '#f0e0f5', actorLineColor: '#7719AA',
+    signalColor: '#b87fd1', signalTextColor: '#f0e0f5',
+    labelBoxBkgColor: '#3a2412', labelBoxBorderColor: '#d9a86c', labelTextColor: '#f5e8d0',
+    loopTextColor: '#f0e0f5',
+    noteBkgColor: '#4a3621', noteTextColor: '#f5e8d0', noteBorderColor: '#d9a86c',
+    activationBorderColor: '#b87fd1', activationBkgColor: '#2a1840',
+    pie1: '#b87fd1', pie2: '#5cb1ec', pie3: '#7ec97e', pie4: '#f7c84a',
+    pie5: '#ff7080', pie6: '#a47dd6', pie7: '#4dc4e3', pie8: '#a8d97a',
+    pie9: '#f0925e', pie10: '#c980d9', pie11: '#4dc8c8', pie12: '#e3717a',
+    pieTitleTextSize: '20px', pieSectionTextColor: '#ffffff'
+  };
+  function isDark(){
+    var t=document.documentElement.dataset.theme;
+    if(t==='dark')return true;
+    if(t==='light')return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function mermaidConfig(){
+    return {
+      startOnLoad:false, theme:'base',
+      themeVariables: isDark()?ONENOTE_DARK:ONENOTE_LIGHT,
+      securityLevel:'loose', fontFamily:'inherit',
+      flowchart:{useMaxWidth:true,htmlLabels:true,curve:'basis'},
+      er:{useMaxWidth:true},
+      sequence:{useMaxWidth:true,actorMargin:60},
+      gantt:{useMaxWidth:true}
+    };
+  }
+  mermaid.initialize(mermaidConfig());
+
+  var modal=document.getElementById('mtMmdModal');
+  var canvas=document.getElementById('mtMmdCanvas');
+  var viewport=document.getElementById('mtMmdViewport');
+  var zoomLabel=document.getElementById('mtMmdZoom');
+  var zoom=1, panX=0, panY=0, dragging=false, dx=0, dy=0, sx=0, sy=0;
+
+  function apply(){canvas.style.transform='translate('+panX+'px,'+panY+'px) scale('+zoom+')';zoomLabel.textContent=Math.round(zoom*100)+'%';}
+  function setZoom(z, cx, cy){var prev=zoom; zoom=Math.max(0.15,Math.min(8,z));
+    if(cx!==undefined){var r=zoom/prev; panX=cx-r*(cx-panX); panY=cy-r*(cy-panY);} apply();}
+  function fit(){var svg=canvas.querySelector('svg'); if(!svg)return;
+    var vw=viewport.clientWidth, vh=viewport.clientHeight;
+    var sw=svg.getBoundingClientRect().width/zoom, sh=svg.getBoundingClientRect().height/zoom;
+    var f=Math.min(vw/sw, vh/sh, 3)*0.9; zoom=f; panX=(vw-sw*f)/2; panY=(vh-sh*f)/2; apply();}
+  function auto(){var svg=canvas.querySelector('svg'); if(!svg)return;
+    var vw=viewport.clientWidth, vh=viewport.clientHeight;
+    var r=svg.getBoundingClientRect(); var ow=r.width/zoom, oh=r.height/zoom;
+    var els=svg.querySelectorAll('text,.nodeLabel,.edgeLabel span,foreignObject span'); var hs=[];
+    for(var i=0;i<els.length;i++){var h=els[i].getBoundingClientRect().height/zoom; if(h>2&&h<200)hs.push(h);}
+    var tz; if(hs.length){hs.sort(function(a,b){return a-b;}); tz=18/hs[Math.floor(hs.length/2)];}
+    else{tz=Math.max(1,Math.min(vw/ow, vh/oh)*0.9*1.5);}
+    zoom=Math.max(0.5,Math.min(3.5,tz));
+    panX=ow*zoom<=vw?(vw-ow*zoom)/2:20; panY=oh*zoom<=vh?(vh-oh*zoom)/2:20; apply();}
+  function open(host){var svg=host.querySelector('svg'); if(!svg)return;
+    canvas.innerHTML=''; var c=svg.cloneNode(true);
+    c.removeAttribute('width'); c.removeAttribute('height');
+    var br=svg.getBoundingClientRect(); c.style.width=br.width+'px'; c.style.height=br.height+'px';
+    canvas.appendChild(c);
+    modal.classList.add('is-open'); modal.setAttribute('aria-hidden','false');
+    document.body.style.overflow='hidden';
+    zoom=1; panX=0; panY=0; apply(); requestAnimationFrame(fit);}
+  function close(){modal.classList.remove('is-open'); modal.setAttribute('aria-hidden','true');
+    document.body.style.overflow=''; canvas.innerHTML='';}
+
+  modal.addEventListener('click', function(e){
+    if(e.target===modal){close(); return;}
+    var act=e.target.closest && e.target.closest('[data-mmd-act]');
+    if(!act)return;
+    switch(act.dataset.mmdAct){
+      case 'zoom-in': setZoom(zoom*1.25); break;
+      case 'zoom-out': setZoom(zoom/1.25); break;
+      case 'reset': zoom=1; panX=0; panY=0; apply(); break;
+      case 'fit': fit(); break;
+      case 'auto': auto(); break;
+      case 'close': close(); break;
+    }
+  });
+  viewport.addEventListener('wheel', function(e){e.preventDefault();
+    var r=viewport.getBoundingClientRect();
+    setZoom(zoom*(e.deltaY<0?1.12:1/1.12), e.clientX-r.left, e.clientY-r.top);
+  }, {passive:false});
+  viewport.addEventListener('mousedown', function(e){if(e.button!==0)return;
+    dragging=true; dx=e.clientX; dy=e.clientY; sx=panX; sy=panY;
+    canvas.classList.add('is-grabbing'); e.preventDefault();});
+  window.addEventListener('mousemove', function(e){if(!dragging)return;
+    panX=sx+(e.clientX-dx); panY=sy+(e.clientY-dy); apply();});
+  window.addEventListener('mouseup', function(){dragging=false; canvas.classList.remove('is-grabbing');});
+  document.addEventListener('keydown', function(e){
+    if(!modal.classList.contains('is-open'))return;
+    if(e.key==='Escape')close();
+    else if(e.key==='+'||e.key==='=')setZoom(zoom*1.25);
+    else if(e.key==='-')setZoom(zoom/1.25);
+    else if(e.key==='0'){zoom=1; panX=0; panY=0; apply();}
+    else if(e.key==='f'||e.key==='F')fit();
+    else if(e.key==='a'||e.key==='A')auto();
+  });
+
+  function bindHosts(){
+    document.querySelectorAll('.mermaid[data-processed="true"]').forEach(function(host){
+      if(host.dataset.mmdBound)return;
+      host.dataset.mmdBound='1';
+      host.style.cursor='zoom-in';
+      host.addEventListener('click', function(e){
+        if(e.target.closest('a'))return;
+        open(host);
+      });
+    });
+  }
+  function snapshotSources(){
+    document.querySelectorAll('.mermaid,pre.mermaid').forEach(function(el){
+      if(!el.dataset.mmdSource){ el.dataset.mmdSource=el.textContent; }
+    });
+  }
+  function restoreSources(){
+    document.querySelectorAll('.mermaid,pre.mermaid').forEach(function(el){
+      if(el.dataset.mmdSource){
+        el.textContent=el.dataset.mmdSource;
+        el.removeAttribute('data-processed');
+        delete el.dataset.mmdBound;
+      }
+    });
+  }
+  function runMermaid(){
+    snapshotSources();
+    mermaid.run({querySelector:'.mermaid,pre.mermaid,pre>code.language-mermaid'})
+      .then(bindHosts)
+      .catch(function(err){console.error('mermaid:',err);});
+  }
+  function rerender(){
+    restoreSources();
+    mermaid.initialize(mermaidConfig());
+    runMermaid();
+  }
+  new MutationObserver(function(muts){
+    for(var i=0;i<muts.length;i++){
+      if(muts[i].attributeName==='data-theme'){rerender();return;}
+    }
+  }).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  if(window.matchMedia){
+    var mql=window.matchMedia('(prefers-color-scheme: dark)');
+    var onChange=function(){
+      var t=document.documentElement.dataset.theme;
+      if(t!=='light'&&t!=='dark')rerender();
+    };
+    if(mql.addEventListener)mql.addEventListener('change',onChange);
+    else if(mql.addListener)mql.addListener(onChange);
+  }
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',runMermaid);} else {runMermaid();}
+})();
+</script>{% endif %}
+{% if has_math %}{% if inline_mathjax %}<script>{{ inline_mathjax | safe }}</script>{% elif mathjax_src %}<script src="{{ mathjax_src | safe }}" async></script>{% endif %}{% endif %}
+{% if inline_app %}<script>{{ inline_app | safe }}</script>{% else %}<script src="{{ assets_base | safe }}app.js"></script>{% endif %}
+{% if live_reload_js %}<script>{{ live_reload_js | safe }}</script>{% endif %}
+</body>
+</html>

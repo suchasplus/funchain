@@ -1,5 +1,5 @@
-use std::env;
 use rand::Rng;
+use std::env;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -16,14 +16,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Try 'rand32 --help' for more information.");
         std::process::exit(1);
     }
-    
+
     // Parse the length argument
     let len: usize = args[1].parse()?;
-    
+
     // Generate hex string
     let hex_string = generate_hex(len);
     println!("{}", hex_string);
-    
+
     Ok(())
 }
 
@@ -48,7 +48,7 @@ mod tests {
     fn test_generate_hex_valid_chars() {
         let output = generate_hex(50);
         for c in output.chars() {
-            assert!(c.is_digit(16));
+            assert!(c.is_ascii_hexdigit());
         }
     }
 
@@ -78,7 +78,7 @@ mod tests {
         let output = generate_hex(1024);
         assert_eq!(output.len(), 2048);
         for c in output.chars() {
-            assert!(c.is_digit(16));
+            assert!(c.is_ascii_hexdigit());
         }
     }
 }

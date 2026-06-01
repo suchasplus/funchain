@@ -85,12 +85,12 @@ pub fn decode(s: &str) -> Result<u128, String> {
             'a'..='z' => c as u128 - 'a' as u128 + 36,
             _ => return Err(format!("Invalid character: {}", c)),
         };
-        
+
         match num.checked_mul(62) {
             Some(v) => num = v,
             None => return Err("Overflow: number too large for u128".to_string()),
         }
-        
+
         match num.checked_add(val) {
             Some(v) => num = v,
             None => return Err("Overflow: number too large for u128".to_string()),
@@ -220,14 +220,25 @@ mod tests {
     #[test]
     fn test_roundtrip_various_values() {
         let test_values: Vec<u128> = vec![
-            0, 1, 61, 62, 63,
-            100, 1000, 10000,
+            0,
+            1,
+            61,
+            62,
+            63,
+            100,
+            1000,
+            10000,
             u128::MAX / 2,
             u128::MAX - 1,
             u128::MAX,
         ];
         for val in test_values {
-            assert_eq!(decode(&encode(val)).unwrap(), val, "Failed roundtrip for {}", val);
+            assert_eq!(
+                decode(&encode(val)).unwrap(),
+                val,
+                "Failed roundtrip for {}",
+                val
+            );
         }
     }
 }

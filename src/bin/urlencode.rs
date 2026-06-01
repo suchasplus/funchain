@@ -21,7 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Read from stdin if no arguments provided
         io::stdin().read_to_string(&mut input)?;
     }
-    
+
     let encoded = process(&input);
     io::stdout().write_all(encoded.as_bytes())?;
 

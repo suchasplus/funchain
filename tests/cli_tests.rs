@@ -128,10 +128,7 @@ fn test_from62_with_stdin() {
 
 #[test]
 fn test_from62_invalid() {
-    cargo_bin_cmd!("from62")
-        .arg("invalid!")
-        .assert()
-        .failure();
+    cargo_bin_cmd!("from62").arg("invalid!").assert().failure();
 }
 
 #[test]
@@ -243,10 +240,7 @@ fn test_to62_overflow() {
 
 #[test]
 fn test_to62_negative() {
-    cargo_bin_cmd!("to62")
-        .arg("-1")
-        .assert()
-        .failure();
+    cargo_bin_cmd!("to62").arg("-1").assert().failure();
 }
 
 #[test]
