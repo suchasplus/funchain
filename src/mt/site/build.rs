@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::scan::{Entry, landing_page, scan};
-use super::tree::{TreeNode, build_tree, rel_path, render_tree};
+use super::tree::{TreeNode, build_tree_labeled, rel_path, render_tree};
 use super::url_path::encode_segments;
 use super::wikilinks::NameIndex;
 
@@ -23,6 +23,11 @@ pub struct BuildOptions {
     pub theme: String,
     /// Optional live-reload JS injected into each page (serve mode).
     pub live_reload_js: String,
+    /// Basenames (case-insensitive) removed from the scan — typically the
+    /// global config's AI-prompt list. Empty = keep everything.
+    pub exclude: Vec<String>,
+    /// Show each page's source filename as small text in the nav tree.
+    pub nav_filenames: bool,
 }
 
 /// State needed to render any page in a site — built once by [`Context::prepare`].
@@ -65,6 +70,8 @@ pub enum SiteError {
     Render(crate::mt::render::RenderError),
     Page(crate::mt::assets::page::RenderError),
     Empty(PathBuf),
+    /// The scan found markdown files but the exclude list removed them all.
+    AllExcluded(PathBuf),
 }
 
 impl std::fmt::Display for SiteError {
@@ -74,6 +81,11 @@ impl std::fmt::Display for SiteError {
             SiteError::Render(e) => write!(f, "render: {e}"),
             SiteError::Page(e) => write!(f, "page: {e}"),
             SiteError::Empty(p) => write!(f, "no markdown files found under {}", p.display()),
+            SiteError::AllExcluded(p) => write!(
+                f,
+                "all markdown files under {} are excluded by config — pass --all to include them",
+                p.display()
+            ),
         }
     }
 }
@@ -84,7 +96,7 @@ impl std::error::Error for SiteError {
             SiteError::Io(e) => Some(e),
             SiteError::Render(e) => Some(e),
             SiteError::Page(e) => Some(e),
-            SiteError::Empty(_) => None,
+            SiteError::Empty(_) | SiteError::AllExcluded(_) => None,
         }
     }
 }
@@ -126,12 +138,21 @@ impl Context {
         if entries.is_empty() {
             return Err(SiteError::Empty(opts.root.clone()));
         }
+        if !opts.exclude.is_empty() {
+            entries.retain(|e| {
+                let base = e.rel.rsplit('/').next().unwrap_or(&e.rel);
+                !opts.exclude.iter().any(|x| x.eq_ignore_ascii_case(base))
+            });
+            if entries.is_empty() {
+                return Err(SiteError::AllExcluded(opts.root.clone()));
+            }
+        }
         for e in entries.iter_mut() {
             let src = fs::read_to_string(&e.abs)?;
             let meta = extract_meta(&src, e.abs.to_str().unwrap_or(""))?;
             e.title = meta.title;
         }
-        let tree = build_tree(&entries);
+        let tree = build_tree_labeled(&entries, opts.nav_filenames);
         let name_index = NameIndex::build(&entries);
         Ok(Context {
             opts,
@@ -304,6 +325,71 @@ mod tests {
     }
 
     #[test]
+    fn prepare_filters_excluded_basenames_case_insensitively() {
+        let src = tmp("excl");
+        write(src.join("README.md"), "# Home\n");
+        write(src.join("CLAUDE.md"), "# AI instructions\n");
+        write(src.join("appendix/agents.MD"), "# nested, odd case\n");
+        write(src.join("appendix/notes.md"), "# Notes\n");
+
+        let renderer = Renderer::new();
+        let ctx = Context::prepare(
+            BuildOptions {
+                root: src.clone(),
+                exclude: vec!["CLAUDE.md".into(), "AGENTS.md".into()],
+                ..Default::default()
+            },
+            &renderer,
+        )
+        .unwrap();
+        let rels: Vec<&str> = ctx.entries.iter().map(|e| e.rel.as_str()).collect();
+        assert_eq!(
+            rels,
+            vec!["README.md", "appendix/notes.md"],
+            "exclusion wrong: {rels:?}"
+        );
+    }
+
+    #[test]
+    fn prepare_empty_exclude_list_keeps_everything() {
+        let src = tmp("noexcl");
+        write(src.join("README.md"), "# Home\n");
+        write(src.join("CLAUDE.md"), "# AI instructions\n");
+        let renderer = Renderer::new();
+        let ctx = Context::prepare(
+            BuildOptions {
+                root: src.clone(),
+                ..Default::default()
+            },
+            &renderer,
+        )
+        .unwrap();
+        assert_eq!(ctx.entries.len(), 2);
+    }
+
+    #[test]
+    fn prepare_all_files_excluded_hints_at_all_flag() {
+        let src = tmp("allexcl");
+        write(src.join("CLAUDE.md"), "# AI instructions\n");
+        let renderer = Renderer::new();
+        let msg = match Context::prepare(
+            BuildOptions {
+                root: src.clone(),
+                exclude: vec!["CLAUDE.md".into()],
+                ..Default::default()
+            },
+            &renderer,
+        ) {
+            Err(e) => e.to_string(),
+            Ok(_) => panic!("prepare should fail when every file is excluded"),
+        };
+        assert!(
+            msg.contains("--all"),
+            "error should mention the --all escape hatch: {msg}"
+        );
+    }
+
+    #[test]
     fn sanitize_root_name_examples() {
         assert_eq!(sanitize_root_name(Path::new("guide")), "guide");
         assert_eq!(sanitize_root_name(Path::new("my-docs")), "my-docs");
@@ -329,7 +415,7 @@ mod tests {
                 out_dir: out.clone(),
                 site_name: "docs".into(),
                 theme: "auto".into(),
-                live_reload_js: String::new(),
+                ..Default::default()
             },
             &renderer,
         )

@@ -12,8 +12,33 @@ pub struct TreeNode {
     pub rel: String,
     /// Relative html path (empty for folders).
     pub out_rel: String,
+    /// Source basename shown as small text under the label (empty = hidden;
+    /// always empty for folders).
+    pub file_name: String,
     pub is_dir: bool,
     pub children: Vec<TreeNode>,
+}
+
+/// [`build_tree`] with optional filename labels: when `with_filenames` is
+/// set, each file node carries its source basename for the nav's small-text
+/// line under the title. The basename (not the full relative path) is shown —
+/// the folder group already communicates the directory.
+pub fn build_tree_labeled(entries: &[Entry], with_filenames: bool) -> TreeNode {
+    let mut root = build_tree(entries);
+    if with_filenames {
+        fill_file_names(&mut root);
+    }
+    root
+}
+
+fn fill_file_names(node: &mut TreeNode) {
+    for c in node.children.iter_mut() {
+        if c.is_dir {
+            fill_file_names(c);
+        } else {
+            c.file_name = c.rel.rsplit('/').next().unwrap_or(&c.rel).to_string();
+        }
+    }
 }
 
 /// Groups entries by their directory components, sort folders first.
@@ -45,6 +70,7 @@ fn insert_path(parent: &mut TreeNode, parts: &[&str], e: &Entry) {
             name: label,
             rel: e.rel.clone(),
             out_rel: e.out_rel.clone(),
+            file_name: String::new(),
             is_dir: false,
             children: Vec::new(),
         });
@@ -125,13 +151,24 @@ fn render_list(
             // segment before emitting so browsers receive a valid URL — see
             // `crate::mt::site::url_path`.
             let href = super::url_path::encode_segments(&rel_path(current_out_rel, &c.out_rel));
-            let _ = write!(
-                buf,
-                r#"<li><a class="{}" href="{}">{}</a></li>"#,
-                cls,
-                html_escape(&href),
-                html_escape(&c.name)
-            );
+            if c.file_name.is_empty() {
+                let _ = write!(
+                    buf,
+                    r#"<li><a class="{}" href="{}">{}</a></li>"#,
+                    cls,
+                    html_escape(&href),
+                    html_escape(&c.name)
+                );
+            } else {
+                let _ = write!(
+                    buf,
+                    r#"<li><a class="{}" href="{}"><span class="mt-nav__label">{}</span><span class="mt-nav__file">{}</span></a></li>"#,
+                    cls,
+                    html_escape(&href),
+                    html_escape(&c.name),
+                    html_escape(&c.file_name)
+                );
+            }
         }
     }
     buf.push_str("</ul>");
@@ -228,6 +265,41 @@ mod tests {
             html.contains(r#"href="../README.html""#),
             "README href wrong: {html}"
         );
+    }
+
+    #[test]
+    fn labeled_tree_shows_source_filenames() {
+        let entries = vec![
+            entry("ai-autonomous-iteration-guide.md", "AI Agent 自主迭代实践"),
+            entry("appendix/rta-proxy-measurement.md", "RTA Proxy 测量与计算方案"),
+        ];
+        let root = build_tree_labeled(&entries, true);
+        let html = render_tree(&root, "", "x.html");
+        // Title and filename live in separate spans inside the link.
+        assert!(
+            html.contains(
+                r#"<span class="mt-nav__label">AI Agent 自主迭代实践</span><span class="mt-nav__file">ai-autonomous-iteration-guide.md</span>"#
+            ),
+            "filename span missing: {html}"
+        );
+        // Nested file shows its basename, not the full relative path — the
+        // folder group already communicates the directory.
+        assert!(
+            html.contains(r#"<span class="mt-nav__file">rta-proxy-measurement.md</span>"#),
+            "nested filename wrong: {html}"
+        );
+    }
+
+    #[test]
+    fn labeled_tree_disabled_keeps_plain_links() {
+        let entries = vec![entry("guide/intro.md", "Intro")];
+        let root = build_tree_labeled(&entries, false);
+        let html = render_tree(&root, "", "x.html");
+        assert!(
+            !html.contains("mt-nav__file"),
+            "filename span should be absent when disabled: {html}"
+        );
+        assert!(html.contains(">Intro</a>"), "plain label lost: {html}");
     }
 
     #[test]

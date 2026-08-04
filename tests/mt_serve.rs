@@ -162,6 +162,8 @@ fn dir_serves_pages_and_landing() {
         port: 0,
         theme: "auto".into(),
         on_warning: None,
+        exclude: Vec::new(),
+        nav_filenames: true,
     })
     .unwrap();
     let addr = server.addr();
@@ -197,6 +199,8 @@ fn dir_watcher_skips_hidden_and_vendor_dirs() {
         port: 0,
         theme: "auto".into(),
         on_warning: None,
+        exclude: Vec::new(),
+        nav_filenames: true,
     })
     .unwrap();
 
@@ -237,6 +241,8 @@ fn dir_serves_space_and_non_ascii_filenames() {
         port: 0,
         theme: "auto".into(),
         on_warning: None,
+        exclude: Vec::new(),
+        nav_filenames: true,
     })
     .unwrap();
     let addr = server.addr();
@@ -291,6 +297,8 @@ fn dir_warning_sink_receives_diagnostics() {
         port: 0,
         theme: "auto".into(),
         on_warning: Some(sink),
+        exclude: Vec::new(),
+        nav_filenames: true,
     })
     .unwrap();
     // Hit the page so the initial render has definitely completed.
@@ -318,6 +326,8 @@ fn dir_cache_only_rerenders_modified_files() {
         port: 0,
         theme: "auto".into(),
         on_warning: None,
+        exclude: Vec::new(),
+        nav_filenames: true,
     })
     .unwrap();
     let addr = server.addr();
@@ -354,6 +364,8 @@ fn dir_ws_reload_on_edit() {
         port: 0,
         theme: "auto".into(),
         on_warning: None,
+        exclude: Vec::new(),
+        nav_filenames: true,
     })
     .unwrap();
 

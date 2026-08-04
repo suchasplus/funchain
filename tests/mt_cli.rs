@@ -221,6 +221,120 @@ fn mt_rs_renders_showcase_md_with_all_features() {
     assert!(html.contains("<style>"), "no inline style");
 }
 
+/// Directory fixture with AI-prompt files mixed in. Returns (src, scratch, xdg).
+/// `xdg` is an isolated XDG_CONFIG_HOME so the invoking user's real
+/// ~/.config/mt/config.toml can never leak into the test.
+fn ai_site_fixture(label: &str) -> (PathBuf, PathBuf, PathBuf) {
+    let src = tempdir(&format!("{label}-src"));
+    let scratch = tempdir(&format!("{label}-tmp"));
+    let xdg = tempdir(&format!("{label}-xdg"));
+    fs::create_dir_all(src.join("appendix")).unwrap();
+    fs::write(src.join("README.md"), "# Home\n").unwrap();
+    fs::write(src.join("CLAUDE.md"), "# AI instructions\n").unwrap();
+    fs::write(src.join("AGENTS.md"), "# Agent guide\n").unwrap();
+    fs::write(src.join("appendix/measure.md"), "# 测量方案\n").unwrap();
+    (src, scratch, xdg)
+}
+
+fn out_root(scratch: &PathBuf, src: &PathBuf) -> PathBuf {
+    let slug = src.file_name().and_then(|s| s.to_str()).unwrap().to_string();
+    scratch.join("mt").join(slug)
+}
+
+#[test]
+fn mt_rs_dir_mode_hides_ai_prompt_files_by_default() {
+    let (src, scratch, xdg) = ai_site_fixture("ai-default");
+    Command::cargo_bin("mt-rs")
+        .unwrap()
+        .env("TMPDIR", &scratch)
+        .env("XDG_CONFIG_HOME", &xdg)
+        .arg("--no-open")
+        .arg(&src)
+        .assert()
+        .success();
+
+    let out = out_root(&scratch, &src);
+    assert!(out.join("README.html").exists(), "README missing");
+    assert!(out.join("appendix/measure.html").exists(), "appendix missing");
+    assert!(
+        !out.join("CLAUDE.html").exists(),
+        "CLAUDE.md should be excluded by default"
+    );
+    assert!(
+        !out.join("AGENTS.html").exists(),
+        "AGENTS.md should be excluded by default"
+    );
+
+    let home = fs::read_to_string(out.join("README.html")).unwrap();
+    assert!(!home.contains("CLAUDE"), "nav still lists CLAUDE: {home}");
+    // Nav shows source filenames as small text by default.
+    assert!(
+        home.contains(r#"<span class="mt-nav__file">measure.md</span>"#),
+        "nav filename span missing: {home}"
+    );
+}
+
+#[test]
+fn mt_rs_all_flag_includes_excluded_files() {
+    let (src, scratch, xdg) = ai_site_fixture("ai-all");
+    Command::cargo_bin("mt-rs")
+        .unwrap()
+        .env("TMPDIR", &scratch)
+        .env("XDG_CONFIG_HOME", &xdg)
+        .args(["--no-open", "--all"])
+        .arg(&src)
+        .assert()
+        .success();
+
+    let out = out_root(&scratch, &src);
+    assert!(
+        out.join("CLAUDE.html").exists(),
+        "--all must include CLAUDE.md"
+    );
+    assert!(
+        out.join("AGENTS.html").exists(),
+        "--all must include AGENTS.md"
+    );
+}
+
+#[test]
+fn mt_rs_config_toml_overrides_defaults() {
+    let (src, scratch, xdg) = ai_site_fixture("ai-cfg");
+    fs::write(src.join("secret.md"), "# internal\n").unwrap();
+    fs::create_dir_all(xdg.join("mt")).unwrap();
+    fs::write(
+        xdg.join("mt/config.toml"),
+        "[site]\nexclude = [\"secret.md\"]\nnav_filenames = false\n",
+    )
+    .unwrap();
+
+    Command::cargo_bin("mt-rs")
+        .unwrap()
+        .env("TMPDIR", &scratch)
+        .env("XDG_CONFIG_HOME", &xdg)
+        .arg("--no-open")
+        .arg(&src)
+        .assert()
+        .success();
+
+    let out = out_root(&scratch, &src);
+    // Custom list replaces the default one entirely.
+    assert!(
+        out.join("CLAUDE.html").exists(),
+        "custom exclude list should replace the default (CLAUDE.md kept)"
+    );
+    assert!(
+        !out.join("secret.html").exists(),
+        "secret.md should be excluded by config"
+    );
+    // nav_filenames = false disables the small-text filename line.
+    let home = fs::read_to_string(out.join("README.html")).unwrap();
+    assert!(
+        !home.contains("mt-nav__file"),
+        "nav filenames should be off: {home}"
+    );
+}
+
 #[test]
 fn mt_rs_dir_mode_rejects_print() {
     let dir = tempdir("dir-reject");

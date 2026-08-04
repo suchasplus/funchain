@@ -30,6 +30,11 @@ pub struct Cli {
     #[argh(switch)]
     pub print: bool,
 
+    /// include files hidden by the global config's exclude list
+    /// (CLAUDE.md, AGENTS.md, … by default) in directory mode.
+    #[argh(switch)]
+    pub all: bool,
+
     /// print version metadata and exit.
     #[argh(switch, short = 'V')]
     pub version: bool,

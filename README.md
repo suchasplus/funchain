@@ -184,9 +184,31 @@ mt-rs --serve --port 8000 --no-open path/to/doc.md
 ```bash
 mt-rs --print path/to/doc.md     # render HTML to stdout (good for pipes)
 mt-rs --theme dark path/to/...   # force theme (auto | light | dark)
+mt-rs --all path/to/docs/        # include files hidden by the config's exclude list
 mt-rs --version                  # build metadata (commit + timestamp)
 mt-rs --help
 ```
+
+**Global config** — `~/.config/mt/config.toml` (honors `$XDG_CONFIG_HOME`)
+
+Directory mode hides AI-assistant prompt files by default so a rendered
+site only shows real documentation. Explicit single-file targets
+(`mt-rs CLAUDE.md`) always render.
+
+```toml
+[site]
+# Basenames (case-insensitive) hidden from directory scans.
+# Defaults to CLAUDE.md, CLAUDE.local.md, AGENTS.md, GEMINI.md.
+# Set to [] to hide nothing; the list REPLACES the default one.
+exclude = ["CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", "GEMINI.md"]
+
+# Show each page's source filename as small text under its title in the
+# left nav (default true).
+nav_filenames = true
+```
+
+Pass `--all` to bypass the exclude list for one run without editing the
+config.
 
 **Features**
 

@@ -11,6 +11,7 @@
 pub mod assets;
 pub mod browser;
 pub mod cli;
+pub mod config;
 pub mod render;
 pub mod serve;
 pub mod site;
@@ -84,11 +85,14 @@ fn serve_single_mode(cli: &cli::Cli, file: &Path, theme: &str) -> Result<(), Box
 }
 
 fn serve_dir_mode(cli: &cli::Cli, dir: &Path) -> Result<(), BoxedErr> {
+    let cfg = config::load();
     let server = serve::serve_dir(serve::DirConfig {
         root: dir.to_path_buf(),
         port: cli.port,
         theme: cli.theme.clone(),
         on_warning: Some(cli_warning_sink()),
+        exclude: effective_excludes(cli, &cfg),
+        nav_filenames: cfg.nav_filenames,
     })?;
     let url = server.landing_url();
     eprintln!("mt: serving {} on {} (Ctrl-C to stop)", dir.display(), url);
@@ -101,6 +105,16 @@ fn serve_dir_mode(cli: &cli::Cli, dir: &Path) -> Result<(), BoxedErr> {
     Ok(())
 }
 
+/// Exclude list for directory scans: the global config's list, unless the
+/// user passed `--all` to bypass it for this run.
+fn effective_excludes(cli: &cli::Cli, cfg: &config::MtConfig) -> Vec<String> {
+    if cli.all {
+        Vec::new()
+    } else {
+        cfg.exclude.clone()
+    }
+}
+
 fn run_dir(cli: &cli::Cli, dir: &Path) -> Result<(), BoxedErr> {
     if cli.print {
         return Err("--print not supported in directory mode".into());
@@ -111,6 +125,7 @@ fn run_dir(cli: &cli::Cli, dir: &Path) -> Result<(), BoxedErr> {
     if cli.serve {
         return serve_dir_mode(cli, dir);
     }
+    let cfg = config::load();
     let slug = site::sanitize_root_name(dir);
     let out_root = std::env::temp_dir().join("mt").join(slug);
     let renderer = Renderer::new();
@@ -125,6 +140,8 @@ fn run_dir(cli: &cli::Cli, dir: &Path) -> Result<(), BoxedErr> {
                 .to_string(),
             theme: cli.theme.clone(),
             live_reload_js: String::new(),
+            exclude: effective_excludes(cli, &cfg),
+            nav_filenames: cfg.nav_filenames,
         },
         &renderer,
     )?;
@@ -325,6 +342,7 @@ mod tests {
             no_open: true,
             theme: "auto".into(),
             print: true,
+            all: false,
             version: false,
             target: Some(md.to_string_lossy().into_owned()),
         };
@@ -348,6 +366,7 @@ mod tests {
             no_open: true,
             theme: "auto".into(),
             print: false,
+            all: false,
             version: false,
             target: Some(md.to_string_lossy().into_owned()),
         };
@@ -377,6 +396,7 @@ mod tests {
             no_open: true,
             theme: "auto".into(),
             print: false,
+            all: false,
             version: false,
             target: Some(md.to_string_lossy().into_owned()),
         };

@@ -227,6 +227,16 @@ body {
   background: var(--mt-accent);
   font-weight: 500;
 }
+.mt-nav__label { display: block; }
+.mt-nav__file {
+  display: block;
+  font-family: var(--mt-font-mono);
+  font-size: 10.5px;
+  color: var(--mt-fg-subtle);
+  margin-top: 1px;
+  word-break: break-all;
+}
+.mt-nav__link.is-current .mt-nav__file { color: var(--mt-accent-fg); opacity: 0.75; }
 
 /* ---------- Article ---------- */
 .mt-content {

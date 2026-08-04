@@ -9,7 +9,7 @@ default = ["mt"]
 # mt — Markdown viewer (mt-rs binary). Deps wired in incrementally M2-M6.
 mt = [
   "dep:include_dir", "dep:minijinja", "dep:serde",
-  "dep:comrak", "dep:syntect", "dep:two-face", "dep:regex", "dep:serde_yml",
+  "dep:comrak", "dep:syntect", "dep:two-face", "dep:regex", "dep:serde_yml", "dep:toml",
   "dep:argh", "dep:webbrowser", "dep:walkdir",
   "dep:tiny_http", "dep:tungstenite", "dep:notify", "dep:crossbeam-channel",
 ]
@@ -32,6 +32,7 @@ syntect = { version = "5", optional = true, default-features = false, features =
 # packages bundled with syntect lack these. Feature must match syntect's
 # regex backend (fancy, pure Rust).
 two-face = { version = "0.5", optional = true, default-features = false, features = ["syntect-fancy"] }
+toml = { version = "1", optional = true, default-features = false, features = ["parse", "serde"] }
 regex = { version = "1", optional = true }
 serde_yml = { version = "0.0.12", optional = true }
 # mt — M4 (CLI flow)

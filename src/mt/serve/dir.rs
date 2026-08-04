@@ -28,6 +28,11 @@ pub struct DirConfig {
     pub theme: String,
     /// See [`crate::mt::serve::WarningSink`]. `None` drops warnings silently.
     pub on_warning: Option<WarningSink>,
+    /// Basenames (case-insensitive) hidden from the scan — the global
+    /// config's exclude list unless `--all` cleared it.
+    pub exclude: Vec<String>,
+    /// Show source filenames as small text in the nav tree.
+    pub nav_filenames: bool,
 }
 
 impl std::fmt::Debug for DirConfig {
@@ -181,6 +186,8 @@ fn rebuild(
                 .to_string(),
             theme: cfg.theme.clone(),
             live_reload_js: LIVE_RELOAD_JS.into(),
+            exclude: cfg.exclude.clone(),
+            nav_filenames: cfg.nav_filenames,
         },
         renderer,
     )?;
