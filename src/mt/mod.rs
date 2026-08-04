@@ -12,6 +12,7 @@ pub mod assets;
 pub mod browser;
 pub mod cli;
 pub mod config;
+pub mod pack;
 pub mod render;
 pub mod serve;
 pub mod site;
@@ -38,6 +39,21 @@ pub fn run_with(cli: cli::Cli) -> ExitCode {
         eprintln!("mt: missing FILE.md or DIR argument. Use --help.");
         return ExitCode::from(2);
     };
+    if cli.archive.is_some() {
+        let conflict = if cli.print {
+            Some("--print")
+        } else if cli.output.is_some() {
+            Some("-o")
+        } else if cli.serve {
+            Some("--serve")
+        } else {
+            None
+        };
+        if let Some(flag) = conflict {
+            eprintln!("mt: {flag} and --archive are mutually exclusive");
+            return ExitCode::from(2);
+        }
+    }
     let path = PathBuf::from(&target);
     let meta = match path.metadata() {
         Ok(m) => m,
@@ -93,6 +109,8 @@ fn serve_dir_mode(cli: &cli::Cli, dir: &Path) -> Result<(), BoxedErr> {
         on_warning: Some(cli_warning_sink()),
         exclude: effective_excludes(cli, &cfg),
         nav_filenames: cfg.nav_filenames,
+        include_globs: cli.include.clone(),
+        exclude_globs: cli.exclude.clone(),
     })?;
     let url = server.landing_url();
     eprintln!("mt: serving {} on {} (Ctrl-C to stop)", dir.display(), url);
@@ -127,7 +145,19 @@ fn run_dir(cli: &cli::Cli, dir: &Path) -> Result<(), BoxedErr> {
     }
     let cfg = config::load();
     let slug = site::sanitize_root_name(dir);
-    let out_root = std::env::temp_dir().join("mt").join(slug);
+    // The one-shot browse dir ($TMPDIR/mt/<slug>) persists across runs and
+    // may hold pages from earlier, differently-filtered builds. Archives
+    // must contain exactly this build, so they render into a fresh scratch
+    // dir instead (removed again after packing).
+    let out_root = if cli.archive.is_some() {
+        let d = std::env::temp_dir()
+            .join("mt")
+            .join(format!("archive-{}-{slug}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        d
+    } else {
+        std::env::temp_dir().join("mt").join(&slug)
+    };
     let renderer = Renderer::new();
     let report = site::build(
         site::BuildOptions {
@@ -142,11 +172,24 @@ fn run_dir(cli: &cli::Cli, dir: &Path) -> Result<(), BoxedErr> {
             live_reload_js: String::new(),
             exclude: effective_excludes(cli, &cfg),
             nav_filenames: cfg.nav_filenames,
+            include_globs: cli.include.clone(),
+            exclude_globs: cli.exclude.clone(),
         },
         &renderer,
     )?;
     for pw in &report.warnings {
         eprintln!("mt: warning: {}: {}", pw.source.display(), pw.warning);
+    }
+    if let Some(zip_path) = &cli.archive {
+        let sources: Vec<(PathBuf, String)> = if cli.no_md {
+            Vec::new()
+        } else {
+            report.sources.clone()
+        };
+        let n = pack::pack(zip_path, &slug, &out_root, &sources)?;
+        let _ = std::fs::remove_dir_all(&out_root);
+        eprintln!("mt: archived {n} files → {}", zip_path.display());
+        return Ok(());
     }
     eprintln!("mt: rendered site → {}", out_root.display());
     if !cli.no_open {
@@ -189,6 +232,9 @@ fn run_file(cli: &cli::Cli, path: &Path) -> Result<(), BoxedErr> {
         cli.theme.clone()
     };
 
+    if let Some(zip_path) = &cli.archive {
+        return archive_single(path, &res, &theme, zip_path, cli.no_md);
+    }
     if cli.print {
         return print_html(&res, &theme);
     }
@@ -198,7 +244,8 @@ fn run_file(cli: &cli::Cli, path: &Path) -> Result<(), BoxedErr> {
     oneshot(path, &res, &theme, cli.no_open)
 }
 
-fn print_html(res: &render::RenderResult, theme: &str) -> Result<(), BoxedErr> {
+/// Renders the fully inlined (CSS/JS/fonts baked in) page HTML.
+fn self_contained_html(res: &render::RenderResult, theme: &str) -> Result<String, BoxedErr> {
     let data = build_page(
         &res.title,
         &res.description,
@@ -212,7 +259,11 @@ fn print_html(res: &render::RenderResult, theme: &str) -> Result<(), BoxedErr> {
             ..Default::default()
         },
     )?;
-    let html = render_page(data)?;
+    Ok(render_page(data)?)
+}
+
+fn print_html(res: &render::RenderResult, theme: &str) -> Result<(), BoxedErr> {
+    let html = self_contained_html(res, theme)?;
     print!("{html}");
     Ok(())
 }
@@ -223,20 +274,7 @@ fn write_self_contained(
     theme: &str,
     no_open: bool,
 ) -> Result<(), BoxedErr> {
-    let data = build_page(
-        &res.title,
-        &res.description,
-        res.body.clone(),
-        res.toc_html.clone(),
-        res.features.has_math,
-        res.features.has_mermaid,
-        PageOptions {
-            theme: theme.to_string(),
-            inline: true,
-            ..Default::default()
-        },
-    )?;
-    let html = render_page(data)?;
+    let html = self_contained_html(res, theme)?;
     if let Some(parent) = out.parent()
         && !parent.as_os_str().is_empty()
     {
@@ -247,6 +285,44 @@ fn write_self_contained(
     if !no_open {
         browser::open_file(out)?;
     }
+    Ok(())
+}
+
+/// `--archive` for a single file: pack a self-contained HTML (plus the md
+/// source unless `--no-md`) under `<stem>/` inside the zip. UTF-8 names go
+/// in as-is — zip carries them fine, unlike temp-dir/URL contexts where we
+/// sanitize.
+fn archive_single(
+    src_md: &Path,
+    res: &render::RenderResult,
+    theme: &str,
+    zip_path: &Path,
+    no_md: bool,
+) -> Result<(), BoxedErr> {
+    let file_name = src_md
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("page.md");
+    let stem = match file_name.rfind('.') {
+        Some(idx) if idx > 0 => &file_name[..idx],
+        _ => file_name,
+    };
+    let root = if stem.is_empty() { "page" } else { stem };
+
+    let html = self_contained_html(res, theme)?;
+    let scratch = std::env::temp_dir()
+        .join("mt")
+        .join(format!("archive-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch)?;
+    std::fs::write(scratch.join(format!("{root}.html")), html)?;
+
+    let mut extra: Vec<(PathBuf, String)> = Vec::new();
+    if !no_md {
+        extra.push((src_md.to_path_buf(), file_name.to_string()));
+    }
+    let n = pack::pack(zip_path, root, &scratch, &extra)?;
+    let _ = std::fs::remove_dir_all(&scratch);
+    eprintln!("mt: archived {n} files → {}", zip_path.display());
     Ok(())
 }
 
@@ -343,6 +419,10 @@ mod tests {
             theme: "auto".into(),
             print: true,
             all: false,
+            archive: None,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            no_md: false,
             version: false,
             target: Some(md.to_string_lossy().into_owned()),
         };
@@ -367,6 +447,10 @@ mod tests {
             theme: "auto".into(),
             print: false,
             all: false,
+            archive: None,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            no_md: false,
             version: false,
             target: Some(md.to_string_lossy().into_owned()),
         };
@@ -397,6 +481,10 @@ mod tests {
             theme: "auto".into(),
             print: false,
             all: false,
+            archive: None,
+            include: Vec::new(),
+            exclude: Vec::new(),
+            no_md: false,
             version: false,
             target: Some(md.to_string_lossy().into_owned()),
         };

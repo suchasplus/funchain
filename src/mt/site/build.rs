@@ -28,6 +28,12 @@ pub struct BuildOptions {
     pub exclude: Vec<String>,
     /// Show each page's source filename as small text in the nav tree.
     pub nav_filenames: bool,
+    /// Glob patterns over `rel` paths; non-empty = keep only matches.
+    /// Applied after the basename `exclude` list (CLI `--include`).
+    pub include_globs: Vec<String>,
+    /// Glob patterns over `rel` paths removed from the scan; wins over
+    /// `include_globs` (CLI `--exclude`).
+    pub exclude_globs: Vec<String>,
 }
 
 /// State needed to render any page in a site — built once by [`Context::prepare`].
@@ -62,6 +68,9 @@ pub struct BuildReport {
     pub landing: PathBuf,
     /// Per-page diagnostics, in source order.
     pub warnings: Vec<PageWarning>,
+    /// Every rendered source file as (absolute md path, root-relative md
+    /// path) — what `--archive` packs alongside the HTML.
+    pub sources: Vec<(PathBuf, String)>,
 }
 
 #[derive(Debug)]
@@ -72,6 +81,10 @@ pub enum SiteError {
     Empty(PathBuf),
     /// The scan found markdown files but the exclude list removed them all.
     AllExcluded(PathBuf),
+    /// `--include` / `--exclude` filters matched nothing.
+    FilteredOut(PathBuf),
+    /// Malformed `--include` / `--exclude` glob pattern.
+    Glob(String),
 }
 
 impl std::fmt::Display for SiteError {
@@ -86,6 +99,12 @@ impl std::fmt::Display for SiteError {
                 "all markdown files under {} are excluded by config — pass --all to include them",
                 p.display()
             ),
+            SiteError::FilteredOut(p) => write!(
+                f,
+                "no markdown files under {} match the --include/--exclude filters",
+                p.display()
+            ),
+            SiteError::Glob(e) => write!(f, "bad glob pattern: {e}"),
         }
     }
 }
@@ -96,7 +115,10 @@ impl std::error::Error for SiteError {
             SiteError::Io(e) => Some(e),
             SiteError::Render(e) => Some(e),
             SiteError::Page(e) => Some(e),
-            SiteError::Empty(_) | SiteError::AllExcluded(_) => None,
+            SiteError::Empty(_)
+            | SiteError::AllExcluded(_)
+            | SiteError::FilteredOut(_)
+            | SiteError::Glob(_) => None,
         }
     }
 }
@@ -145,6 +167,17 @@ impl Context {
             });
             if entries.is_empty() {
                 return Err(SiteError::AllExcluded(opts.root.clone()));
+            }
+        }
+        if !opts.include_globs.is_empty() || !opts.exclude_globs.is_empty() {
+            let include = build_globset(&opts.include_globs)?;
+            let exclude = build_globset(&opts.exclude_globs)?;
+            entries.retain(|e| {
+                include.as_ref().is_none_or(|g| g.is_match(&e.rel))
+                    && !exclude.as_ref().is_some_and(|g| g.is_match(&e.rel))
+            });
+            if entries.is_empty() {
+                return Err(SiteError::FilteredOut(opts.root.clone()));
             }
         }
         for e in entries.iter_mut() {
@@ -277,7 +310,35 @@ pub fn build(opts: BuildOptions, renderer: &Renderer) -> Result<BuildReport, Sit
     let landing = landing_page(&ctx.entries)
         .map(|e| ctx.opts.out_dir.join(rel_to_os(&e.out_rel)))
         .unwrap_or_else(|| ctx.opts.out_dir.clone());
-    Ok(BuildReport { landing, warnings })
+    let sources = ctx
+        .entries
+        .iter()
+        .map(|e| (e.abs.clone(), e.rel.clone()))
+        .collect();
+    Ok(BuildReport {
+        landing,
+        warnings,
+        sources,
+    })
+}
+
+/// Compiles glob patterns over slash-separated `rel` paths. `*` stops at
+/// `/` (use `**` to span directories), matching everyday CLI expectations.
+fn build_globset(patterns: &[String]) -> Result<Option<globset::GlobSet>, SiteError> {
+    if patterns.is_empty() {
+        return Ok(None);
+    }
+    let mut b = globset::GlobSetBuilder::new();
+    for p in patterns {
+        let glob = globset::GlobBuilder::new(p)
+            .literal_separator(true)
+            .build()
+            .map_err(|e| SiteError::Glob(e.to_string()))?;
+        b.add(glob);
+    }
+    Ok(Some(
+        b.build().map_err(|e| SiteError::Glob(e.to_string()))?,
+    ))
 }
 
 fn rel_to_os(rel: &str) -> PathBuf {
@@ -365,6 +426,83 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ctx.entries.len(), 2);
+    }
+
+    #[test]
+    fn prepare_include_globs_keep_only_matches() {
+        let src = tmp("inc-glob");
+        write(src.join("README.md"), "# Home\n");
+        write(src.join("guide/intro.md"), "# Intro\n");
+        write(src.join("guide/api.md"), "# API\n");
+        write(src.join("notes/scratch.md"), "# Scratch\n");
+        let renderer = Renderer::new();
+        let ctx = Context::prepare(
+            BuildOptions {
+                root: src.clone(),
+                include_globs: vec!["README.md".into(), "guide/**".into()],
+                ..Default::default()
+            },
+            &renderer,
+        )
+        .unwrap();
+        let rels: Vec<&str> = ctx.entries.iter().map(|e| e.rel.as_str()).collect();
+        assert_eq!(rels, vec!["README.md", "guide/api.md", "guide/intro.md"]);
+    }
+
+    #[test]
+    fn prepare_exclude_globs_remove_matches() {
+        let src = tmp("exc-glob");
+        write(src.join("README.md"), "# Home\n");
+        write(src.join("guide/intro.md"), "# Intro\n");
+        write(src.join("guide/draft-x.md"), "# Draft\n");
+        let renderer = Renderer::new();
+        let ctx = Context::prepare(
+            BuildOptions {
+                root: src.clone(),
+                exclude_globs: vec!["**/draft-*.md".into()],
+                ..Default::default()
+            },
+            &renderer,
+        )
+        .unwrap();
+        let rels: Vec<&str> = ctx.entries.iter().map(|e| e.rel.as_str()).collect();
+        assert_eq!(rels, vec!["README.md", "guide/intro.md"]);
+    }
+
+    #[test]
+    fn prepare_exclude_glob_wins_over_include() {
+        let src = tmp("both-glob");
+        write(src.join("guide/intro.md"), "# Intro\n");
+        write(src.join("guide/wip.md"), "# WIP\n");
+        let renderer = Renderer::new();
+        let ctx = Context::prepare(
+            BuildOptions {
+                root: src.clone(),
+                include_globs: vec!["guide/**".into()],
+                exclude_globs: vec!["guide/wip.md".into()],
+                ..Default::default()
+            },
+            &renderer,
+        )
+        .unwrap();
+        let rels: Vec<&str> = ctx.entries.iter().map(|e| e.rel.as_str()).collect();
+        assert_eq!(rels, vec!["guide/intro.md"]);
+    }
+
+    #[test]
+    fn prepare_bad_glob_is_an_error() {
+        let src = tmp("bad-glob");
+        write(src.join("a.md"), "# a\n");
+        let renderer = Renderer::new();
+        let res = Context::prepare(
+            BuildOptions {
+                root: src.clone(),
+                include_globs: vec!["[".into()],
+                ..Default::default()
+            },
+            &renderer,
+        );
+        assert!(res.is_err(), "malformed glob must not be silently ignored");
     }
 
     #[test]

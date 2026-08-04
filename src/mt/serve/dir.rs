@@ -33,6 +33,10 @@ pub struct DirConfig {
     pub exclude: Vec<String>,
     /// Show source filenames as small text in the nav tree.
     pub nav_filenames: bool,
+    /// `--include` glob filters over root-relative paths (empty = all).
+    pub include_globs: Vec<String>,
+    /// `--exclude` glob filters over root-relative paths.
+    pub exclude_globs: Vec<String>,
 }
 
 impl std::fmt::Debug for DirConfig {
@@ -188,6 +192,8 @@ fn rebuild(
             live_reload_js: LIVE_RELOAD_JS.into(),
             exclude: cfg.exclude.clone(),
             nav_filenames: cfg.nav_filenames,
+            include_globs: cfg.include_globs.clone(),
+            exclude_globs: cfg.exclude_globs.clone(),
         },
         renderer,
     )?;

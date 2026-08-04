@@ -335,6 +335,202 @@ fn mt_rs_config_toml_overrides_defaults() {
     );
 }
 
+fn zip_names(path: &std::path::Path) -> Vec<String> {
+    let f = fs::File::open(path).unwrap();
+    let mut ar = zip::ZipArchive::new(f).unwrap();
+    let mut names: Vec<String> = (0..ar.len())
+        .map(|i| ar.by_index(i).unwrap().name().to_string())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn mt_rs_archive_dir_packs_html_assets_and_md() {
+    let (src, scratch, xdg) = ai_site_fixture("ar-dir");
+    let out = scratch.join("dist/docs.zip");
+    Command::cargo_bin("mt-rs")
+        .unwrap()
+        .env("TMPDIR", &scratch)
+        .env("XDG_CONFIG_HOME", &xdg)
+        .args(["--no-open", "--archive"])
+        .arg(&out)
+        .arg(&src)
+        .assert()
+        .success()
+        .stderr(contains("archived"));
+
+    let names = zip_names(&out);
+    let slug = src.file_name().and_then(|s| s.to_str()).unwrap().to_string();
+    for want in [
+        format!("{slug}/README.html"),
+        format!("{slug}/README.md"),
+        format!("{slug}/appendix/measure.html"),
+        format!("{slug}/appendix/measure.md"),
+        format!("{slug}/assets/style.css"),
+    ] {
+        assert!(names.contains(&want), "missing {want} in {names:?}");
+    }
+    // Config's AI excludes still apply inside archives.
+    assert!(
+        !names.iter().any(|n| n.contains("CLAUDE")),
+        "CLAUDE leaked into archive: {names:?}"
+    );
+}
+
+#[test]
+fn mt_rs_archive_no_md_drops_sources() {
+    let (src, scratch, xdg) = ai_site_fixture("ar-nomd");
+    let out = scratch.join("docs.zip");
+    Command::cargo_bin("mt-rs")
+        .unwrap()
+        .env("TMPDIR", &scratch)
+        .env("XDG_CONFIG_HOME", &xdg)
+        .args(["--no-open", "--no-md", "--archive"])
+        .arg(&out)
+        .arg(&src)
+        .assert()
+        .success();
+    let names = zip_names(&out);
+    assert!(
+        !names.iter().any(|n| n.ends_with(".md")),
+        "md sources leaked despite --no-md: {names:?}"
+    );
+    assert!(names.iter().any(|n| n.ends_with("README.html")));
+}
+
+#[test]
+fn mt_rs_archive_include_exclude_filter_content_and_nav() {
+    let (src, scratch, xdg) = ai_site_fixture("ar-filter");
+    fs::write(src.join("appendix/wip-notes.md"), "# WIP\n").unwrap();
+    let out = scratch.join("docs.zip");
+    Command::cargo_bin("mt-rs")
+        .unwrap()
+        .env("TMPDIR", &scratch)
+        .env("XDG_CONFIG_HOME", &xdg)
+        .args([
+            "--no-open",
+            "--include",
+            "README.md",
+            "--include",
+            "appendix/**",
+            "--exclude",
+            "**/wip-*.md",
+            "--archive",
+        ])
+        .arg(&out)
+        .arg(&src)
+        .assert()
+        .success();
+
+    let names = zip_names(&out);
+    let slug = src.file_name().and_then(|s| s.to_str()).unwrap().to_string();
+    assert!(names.contains(&format!("{slug}/README.html")));
+    assert!(names.contains(&format!("{slug}/appendix/measure.html")));
+    assert!(
+        !names.iter().any(|n| n.contains("wip-notes")),
+        "--exclude ignored: {names:?}"
+    );
+    // A prior unfiltered build into the same TMPDIR must not leak stale
+    // pages into a filtered archive — the archive build uses a fresh dir.
+    Command::cargo_bin("mt-rs")
+        .unwrap()
+        .env("TMPDIR", &scratch)
+        .env("XDG_CONFIG_HOME", &xdg)
+        .arg("--no-open")
+        .arg(&src)
+        .assert()
+        .success(); // renders EVERYTHING into $TMPDIR/mt/<slug>
+    let out2 = scratch.join("filtered2.zip");
+    Command::cargo_bin("mt-rs")
+        .unwrap()
+        .env("TMPDIR", &scratch)
+        .env("XDG_CONFIG_HOME", &xdg)
+        .args(["--no-open", "--include", "appendix/**", "--archive"])
+        .arg(&out2)
+        .arg(&src)
+        .assert()
+        .success();
+    let names2 = zip_names(&out2);
+    assert!(
+        !names2.iter().any(|n| n.ends_with("README.html")),
+        "stale unfiltered page leaked into filtered archive: {names2:?}"
+    );
+    assert!(names2.contains(&format!("{slug}/appendix/measure.html")));
+
+    // Nav inside packed pages matches the packed set — no dead links.
+    let f = fs::File::open(&out).unwrap();
+    let mut ar = zip::ZipArchive::new(f).unwrap();
+    let mut html = String::new();
+    use std::io::Read as _;
+    ar.by_name(&format!("{slug}/README.html"))
+        .unwrap()
+        .read_to_string(&mut html)
+        .unwrap();
+    assert!(
+        !html.contains("wip-notes"),
+        "nav still links excluded page: {html}"
+    );
+}
+
+#[test]
+fn mt_rs_archive_single_file_packs_self_contained_html_and_md() {
+    let dir = tempdir("ar-single");
+    let md = dir.join("方案.md");
+    fs::write(&md, "# 方案\nbody\n").unwrap();
+    let out = dir.join("方案.zip");
+    Command::cargo_bin("mt-rs")
+        .unwrap()
+        .args(["--no-open", "--archive"])
+        .arg(&out)
+        .arg(&md)
+        .assert()
+        .success();
+
+    let names = zip_names(&out);
+    assert!(
+        names.iter().any(|n| n.ends_with(".html")),
+        "html missing: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n.ends_with("方案.md")),
+        "md missing: {names:?}"
+    );
+    // Self-contained: inlined stylesheet, no external assets/ dir.
+    let f = fs::File::open(&out).unwrap();
+    let mut ar = zip::ZipArchive::new(f).unwrap();
+    let html_name = zip_names(&out)
+        .into_iter()
+        .find(|n| n.ends_with(".html"))
+        .unwrap();
+    let mut html = String::new();
+    use std::io::Read as _;
+    ar.by_name(&html_name)
+        .unwrap()
+        .read_to_string(&mut html)
+        .unwrap();
+    assert!(html.contains("<style>"), "not self-contained");
+    assert!(
+        !names.iter().any(|n| n.contains("assets/")),
+        "single-file archive should not carry assets dir: {names:?}"
+    );
+}
+
+#[test]
+fn mt_rs_archive_conflicts_with_print() {
+    let dir = tempdir("ar-conflict");
+    let md = dir.join("a.md");
+    fs::write(&md, "# a\n").unwrap();
+    Command::cargo_bin("mt-rs")
+        .unwrap()
+        .args(["--print", "--no-open", "--archive"])
+        .arg(dir.join("x.zip"))
+        .arg(&md)
+        .assert()
+        .failure()
+        .stderr(contains("--archive"));
+}
+
 #[test]
 fn mt_rs_dir_mode_rejects_print() {
     let dir = tempdir("dir-reject");

@@ -164,6 +164,8 @@ fn dir_serves_pages_and_landing() {
         on_warning: None,
         exclude: Vec::new(),
         nav_filenames: true,
+        include_globs: Vec::new(),
+        exclude_globs: Vec::new(),
     })
     .unwrap();
     let addr = server.addr();
@@ -201,6 +203,8 @@ fn dir_watcher_skips_hidden_and_vendor_dirs() {
         on_warning: None,
         exclude: Vec::new(),
         nav_filenames: true,
+        include_globs: Vec::new(),
+        exclude_globs: Vec::new(),
     })
     .unwrap();
 
@@ -243,6 +247,8 @@ fn dir_serves_space_and_non_ascii_filenames() {
         on_warning: None,
         exclude: Vec::new(),
         nav_filenames: true,
+        include_globs: Vec::new(),
+        exclude_globs: Vec::new(),
     })
     .unwrap();
     let addr = server.addr();
@@ -299,6 +305,8 @@ fn dir_warning_sink_receives_diagnostics() {
         on_warning: Some(sink),
         exclude: Vec::new(),
         nav_filenames: true,
+        include_globs: Vec::new(),
+        exclude_globs: Vec::new(),
     })
     .unwrap();
     // Hit the page so the initial render has definitely completed.
@@ -328,6 +336,8 @@ fn dir_cache_only_rerenders_modified_files() {
         on_warning: None,
         exclude: Vec::new(),
         nav_filenames: true,
+        include_globs: Vec::new(),
+        exclude_globs: Vec::new(),
     })
     .unwrap();
     let addr = server.addr();
@@ -366,6 +376,8 @@ fn dir_ws_reload_on_edit() {
         on_warning: None,
         exclude: Vec::new(),
         nav_filenames: true,
+        include_globs: Vec::new(),
+        exclude_globs: Vec::new(),
     })
     .unwrap();
 

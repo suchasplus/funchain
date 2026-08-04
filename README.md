@@ -189,6 +189,29 @@ mt-rs --version                  # build metadata (commit + timestamp)
 mt-rs --help
 ```
 
+**Archive for distribution** — `--archive`
+
+```bash
+# Zip the rendered site (html + assets + md sources) — extracts into <dirname>/
+mt-rs --archive dist/docs.zip path/to/docs/
+
+# HTML only, no markdown sources
+mt-rs --no-md --archive dist/docs.zip path/to/docs/
+
+# Cherry-pick files: globs over root-relative paths, repeatable.
+# `*` stops at `/`; use `**` to span directories; --exclude wins.
+mt-rs --include 'guide/**' --include 'README.md' --exclude '**/wip-*.md' \
+      --archive dist/guide.zip path/to/docs/
+
+# Single file → zip with a self-contained HTML + the md source
+mt-rs --archive share.zip path/to/doc.md
+```
+
+The include/exclude filters shape the build itself, so the nav and
+prev/next links inside the archive match exactly what's packed — no dead
+links. They also work without `--archive` (plain render and `--serve`).
+`--archive` conflicts with `--print`, `-o`, and `--serve`.
+
 **Global config** — `~/.config/mt/config.toml` (honors `$XDG_CONFIG_HOME`)
 
 Directory mode hides AI-assistant prompt files by default so a rendered

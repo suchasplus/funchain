@@ -35,6 +35,25 @@ pub struct Cli {
     #[argh(switch)]
     pub all: bool,
 
+    /// write a zip archive of the rendered output (html + assets + md
+    /// sources) to PATH, for distribution. Works on files and directories.
+    #[argh(option)]
+    pub archive: Option<PathBuf>,
+
+    /// glob over root-relative paths (repeatable): only matching md files
+    /// are rendered. `*` stops at `/`; use `**` to span directories.
+    #[argh(option)]
+    pub include: Vec<String>,
+
+    /// glob over root-relative paths (repeatable): matching md files are
+    /// dropped; wins over --include.
+    #[argh(option)]
+    pub exclude: Vec<String>,
+
+    /// omit markdown sources from the --archive zip (html + assets only).
+    #[argh(switch)]
+    pub no_md: bool,
+
     /// print version metadata and exit.
     #[argh(switch, short = 'V')]
     pub version: bool,
