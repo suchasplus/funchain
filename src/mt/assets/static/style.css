@@ -24,7 +24,7 @@
 
   /* Geometry */
   --mt-header-h:   56px;
-  --mt-nav-w:      248px;
+  --mt-nav-w:      322px;
   --mt-toc-w:      220px;
   --mt-content-max:720px;
   --mt-radius:     8px;
@@ -205,9 +205,18 @@ body {
   margin: 0 8px 12px;
 }
 .mt-nav__list { list-style: none; margin: 0; padding: 0; }
-.mt-nav__list[data-depth="1"] { margin-left: 6px; }
-.mt-nav__list[data-depth="2"] { margin-left: 12px; }
-.mt-nav__list[data-depth="3"] { margin-left: 18px; }
+/* Nested lists draw a vertical guide line per level, so hierarchy stays
+   readable even where indentation alone is subtle. The line lives on each
+   <li> (segments join seamlessly), which lets the current page's segment
+   take the accent color. Works at any depth — no per-level rules. */
+.mt-nav__list[data-depth] { margin-left: 12px; }
+.mt-nav__list[data-depth] > li {
+  border-left: 1px solid var(--mt-border-strong);
+  padding-left: 7px;
+}
+.mt-nav__list[data-depth] > li:has(> .mt-nav__link.is-current) {
+  border-left-color: var(--mt-accent-fg);
+}
 .mt-nav__group { margin: 4px 0; }
 .mt-nav__folder {
   padding: 6px 10px 4px;
