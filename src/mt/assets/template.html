@@ -207,6 +207,12 @@
     });
   }
   function snapshotSources(){
+    document.querySelectorAll('pre>code.language-mermaid').forEach(function(code){
+      var pre=code.parentElement;
+      if(!pre)return;
+      pre.classList.add('mermaid');
+      pre.textContent=code.textContent;
+    });
     document.querySelectorAll('.mermaid,pre.mermaid').forEach(function(el){
       if(!el.dataset.mmdSource){ el.dataset.mmdSource=el.textContent; }
     });

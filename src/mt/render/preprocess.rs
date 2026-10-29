@@ -307,8 +307,70 @@ pub fn preprocess_mermaid(src: &str) -> String {
         .into_owned()
 }
 
+fn mermaid_tag_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r"</?([a-zA-Z][a-zA-Z0-9_-]*)\s*/?>").expect("mermaid tag regex")
+    })
+}
+
+fn mermaid_ordered_list_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r#"("[\t ]*\d+)\.([\t ]+)"#).expect("mermaid ordered list regex")
+    })
+}
+
+fn mermaid_unordered_list_re() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| {
+        Regex::new(r#"("[\t ]*)([-*+])([\t ]+)"#).expect("mermaid unordered list regex")
+    })
+}
+
+fn is_mermaid_html_tag(tag: &str) -> bool {
+    matches!(
+        tag.to_ascii_lowercase().as_str(),
+        "br" | "b"
+            | "i"
+            | "u"
+            | "s"
+            | "em"
+            | "strong"
+            | "code"
+            | "span"
+            | "sub"
+            | "sup"
+            | "small"
+            | "mark"
+            | "del"
+            | "ins"
+            | "kbd"
+            | "var"
+            | "samp"
+            | "q"
+            | "p"
+            | "div"
+            | "hr"
+            | "a"
+            | "img"
+            | "font"
+            | "ul"
+            | "ol"
+            | "li"
+            | "table"
+            | "thead"
+            | "tbody"
+            | "tr"
+            | "td"
+            | "th"
+            | "pre"
+            | "blockquote"
+    )
+}
+
 pub(crate) fn apply_mermaid_escapes(s: &str) -> String {
-    escape_seq_re()
+    let escaped = escape_seq_re()
         .replace_all(s, |caps: &Captures<'_>| {
             let m = caps.get(0).map(|m| m.as_str()).unwrap_or("");
             if m.len() < 2 {
@@ -324,6 +386,31 @@ pub(crate) fn apply_mermaid_escapes(s: &str) -> String {
                 _ => m.to_string(),
             }
         })
+        .into_owned();
+
+    // Disarm angle-bracket placeholders like `<did>` or `<bid>` that are not
+    // known HTML formatting tags, so Mermaid's DOMPurify (`htmlLabels: true`)
+    // renders them as literal text instead of stripping unknown tags.
+    let tag_safe = mermaid_tag_re()
+        .replace_all(&escaped, |caps: &Captures<'_>| {
+            let full = caps.get(0).map(|m| m.as_str()).unwrap_or("");
+            let name = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+            if is_mermaid_html_tag(name) {
+                full.to_string()
+            } else {
+                format!("<\u{200b}{}", &full[1..])
+            }
+        })
+        .into_owned();
+
+    // Mermaid 11 flowchart-v2 runs `marked.lexer()` on every node label and
+    // rejects list tokens with `Unsupported markdown: list`. Insert a
+    // zero-width space on leading `"1. ` / `"- ` label prefixes.
+    let list_safe = mermaid_ordered_list_re()
+        .replace_all(&tag_safe, "${1}\u{200b}.${2}")
+        .into_owned();
+    mermaid_unordered_list_re()
+        .replace_all(&list_safe, "${1}\u{200b}${2}${3}")
         .into_owned()
 }
 
@@ -535,6 +622,15 @@ mod tests {
     fn mermaid_unknown_escape_passthrough() {
         let out = preprocess_mermaid("```mermaid\nA[\"\\z\"]\n```\n");
         assert!(out.contains(r#"\z"#), "{out}");
+    }
+
+    #[test]
+    fn mermaid_disarms_ordered_list_and_placeholder_tags() {
+        let src = "```mermaid\nflowchart TD\nA[\"1. step <did><br/>next\"]\n```\n";
+        let out = preprocess_mermaid(src);
+        assert!(out.contains("1\u{200b}. step"), "{out}");
+        assert!(out.contains("<\u{200b}did>"), "{out}");
+        assert!(out.contains("<br/>"), "{out}");
     }
 
     // (Source-level heading-attr tests moved to `super::heading::tests` —

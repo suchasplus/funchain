@@ -87,9 +87,11 @@ impl<'a> SyntaxHighlighterAdapter for SyntectAdapter<'a> {
         lang: Option<&str>,
         code: &str,
     ) -> std::io::Result<()> {
-        // Skip our own special blocks (mermaid handled separately downstream).
+        // Skip syntax-highlighting spans on mermaid blocks, but HTML-escape
+        // `<`, `>`, `&` so angle-bracket tokens (e.g. `<did>`, `<br/>`) inside
+        // diagram text aren't parsed as unclosed DOM tags by the browser.
         if lang == Some("mermaid") {
-            return output.write_all(code.as_bytes());
+            return output.write_all(html_escape_code(code).as_bytes());
         }
         let syntax = self.bundle.resolve(lang);
         let mut hgen = ClassedHTMLGenerator::new_with_class_style(
@@ -133,6 +135,19 @@ impl<'a> SyntaxHighlighterAdapter for SyntectAdapter<'a> {
             output.write_all(b"<code>")
         }
     }
+}
+
+fn html_escape_code(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 // ---------- Two-theme stylesheet ----------
@@ -341,13 +356,20 @@ mod tests {
     }
 
     #[test]
-    fn mermaid_blocks_pass_through_unchanged() {
+    fn mermaid_blocks_escape_html_without_highlighting() {
         let bundle = SyntectBundle::new();
         let adapter = SyntectAdapter::new(&bundle);
         let mut buf: Vec<u8> = Vec::new();
         adapter
-            .write_highlighted(&mut buf, Some("mermaid"), "flowchart LR\nA-->B")
+            .write_highlighted(
+                &mut buf,
+                Some("mermaid"),
+                "flowchart LR\nA[\"r_p_d_<did>\"]-->B",
+            )
             .unwrap();
-        assert_eq!(String::from_utf8(buf).unwrap(), "flowchart LR\nA-->B");
+        assert_eq!(
+            String::from_utf8(buf).unwrap(),
+            "flowchart LR\nA[\"r_p_d_&lt;did&gt;\"]--&gt;B"
+        );
     }
 }
